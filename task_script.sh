@@ -1,17 +1,19 @@
 #!/bin/bash
-set -x
+
+ProcCount=$(nproc)
 
 echo "PRE-PROCESSING"
 echo "-----------------"
-echo "Map to Reference; Generate Mapping Stats | Start"
 
-ProcCount = $(nproc)
+bwa mem -t $ProcCount -o "NA12878.bam" ./ref/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fasta NA12878_chr20_1.fastq.gz NA12878_chr20_2.fastq.gz
+samtools stats -@ $ProcCount "NA12878.bam" > "NA12878_stats.txt" 
+samtools sort -@ $ProcCount -o "NA12878_sorted.bam" "NA12878.bam" 
+gatk AddOrReplaceReadGroups -I NA12878_sorted.bam -O NA12878_tagged.bam -LB 'cos' -PL 'ILLUMINA' -PU 'cos' -SM 'NA12878' -ID "NA12878.1"
+gatk MarkDuplicates -I "NA12878_tagged.bam" -O "NA12878_marked_dupl.bam" -M "md_metrics.txt"
+gatk BaseRecalibrator -I NA12878_marked_dupl.bam --known-sites /db/dbsnp_138.hg38.vcf.gz -O NA12878_bl.rt -R /ref/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fasta
+gatk ApplyBQSR -I "NA12878_tagged.bam" -bqsr "NA12878_bl.rt"  -O "NA12878_bqsr.bam"
+gatk BaseRecalibrator -I "NA12878_bqsr.bam" -O "NA12878_bqsr_br.rt" --known-sites /db/dbsnp_138.hg38.vcf.gz -R /ref/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fasta
+gatk AnalyzeCoveriants -before "NA12878_bl.rt" -after "NA12878_bqsr_br.rt" -plots "analyze_base_bqsr.pdf"
 
-bwa mem -t $ProcCount -o "NA12878.sam" ./ref/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fasta NA12878_chr20_1.fastq.gz NA12878_chr20_2.fastq.gz
-samtools stats -@ $ProcCount "NA12878.sam" > "NA12878_stats.txt" 
-
-echo "Map to Reference; Generate Mappings Stats | End"
-echo "Mark Duplicates - Start"
-echo "Mark Duplicates - End"
 echo "VARIANT DISCOVERY"
 echo "-----------------"
