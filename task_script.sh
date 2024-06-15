@@ -13,7 +13,13 @@ gatk MarkDuplicates -I "NA12878_tagged.bam" -O "NA12878_marked_dupl.bam" -M "md_
 gatk BaseRecalibrator -I NA12878_marked_dupl.bam --known-sites /db/dbsnp_138.hg38.vcf.gz -O NA12878_bl.rt -R /ref/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fasta
 gatk ApplyBQSR -I "NA12878_tagged.bam" -bqsr "NA12878_bl.rt"  -O "NA12878_bqsr.bam"
 gatk BaseRecalibrator -I "NA12878_bqsr.bam" -O "NA12878_bqsr_br.rt" --known-sites /db/dbsnp_138.hg38.vcf.gz -R /ref/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fasta
-gatk AnalyzeCoveriants -before "NA12878_bl.rt" -after "NA12878_bqsr_br.rt" -plots "analyze_base_bqsr.pdf"
+gatk AnalyzeCoveriants -before "NA12878_bl.rt" -after "NA12878_bqsr_bl.rt" -plots "analyze_base_bqsr.pdf"
+
+
 
 echo "VARIANT DISCOVERY"
 echo "-----------------"
+
+gatk HaplotypeCaller -R /ref/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fasta -I NA12878_bqsr.bam -O NA12878_variants.vcf.gz
+gatk CollectVariantCallingMetrics -I NA12878_variants.vcf.gz -O NA12878_variant_metrics --DBSNP /db/dbsnp_138.hg38.vcf.gz
+
