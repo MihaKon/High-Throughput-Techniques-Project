@@ -26,6 +26,24 @@ echo "filtrowanie i adnotacja"
 echo "-----------------"
 
 
+
+gatk SelectVariants -V NA12878_variants.vcf.gz -select-type SNP -O NA12878.snps.vcf.gz
+
+
+ gatk VariantRecalibrator -R /ref/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fasta -V NA12878.snp.vcf -O NA12878.snp.recal --tranches-file NA12878.snp.tranches --mode SNP -resource:hapmap,known=false,training=true,truth=true,prior=15.0 /db/hapmap_3.3.hg38.vcf.gz -resource:omni,known=false,training=true,truth=false,prior=12.0 /db/1000G_omni2.5.hg38.vcf.gz -resource:1000G,known=false,training=true,truth=false,prior=10.0 /db/1000G_phase1.snps.high_confidence.hg38.vcf.gz -resource:dbsnp,known=true,training=false,truth=false,prior=2.0 /db/dbsnp_138.hg38.vcf.gz -an QD -an MQ -an MQRankSum -an ReadPosRankSum -an FS -an SOR --rscript-file NA12878.snp.plots.R
+
+gatk ApplyVQSR   -R /ref/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fasta   -V NA12878.snps.vcf.gz   --tranches-file NA12878.snp.tranches   --recal-file NA12878.snp.recal   --truth-sensitivity-filter-level 99.5   -mode SNP   -O NA12878.snp.filtered.vcf.gz
+
+
+gatk SelectVariants -V NA12878_variants.vcf.gz -select-type INDEL -O NA12878.indels.vcf.gz
+
+gatk VariantRecalibrator -R /ref/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fasta -V NA12878.indel.vcf -O NA12878.indel.recal --tranches-file NA12878.indel.tranches --mode INDEL -resource:mills,known=false,training=true,truth=true,prior=10.0 /db/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz -resource:dbsnp,known=true,training=false,truth=false,prior=2.0 /db/dbsnp_138.hg38.vcf.gz -an QD -an MQ -an MQRankSum -an ReadPosRankSum -an FS -an SOR --rscript-file NA12878.indel.plots.R
+
+gatk ApplyVQSR -R /ref/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fasta -V NA12878.indel.vcf -O NA12878.indel.vqsr.vcf --tranches-file NA12878.indel.tranches --recal-file NA12878.indel.recal --truth-sensitivity-filter-level 99.5 -mode INDEL
+
+
+#merge snp i indel 
+
 gatk CNNScoreVariants -V NA12878_variants.vcf.gz -R /ref/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fasta -O NA12878.CNN1D.vcf
 
 gatk CNNScoreVariants -V NA12878_variants.vcf -R /ref/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fasta -O NA12878.CNN2D.vcf -I NA12878_bqsr.bam -tensor-type read_tensor
