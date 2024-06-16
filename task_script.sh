@@ -20,15 +20,23 @@ gatk AnalyzeCoveriants -before "NA12878_bl.rt" -after "NA12878_bqsr_bl.rt" -plot
 echo "VARIANT DISCOVERY"
 echo "-----------------"
 
-variant_discovery() {
-    local input_bam=$1
-    local output_prefix=$2
-    
-    gatk HaplotypeCaller -R /ref/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fasta -I "$input_bam" -O "${output_prefix}_variants.vcf.gz"
-    gatk CollectVariantCallingMetrics -I "${output_prefix}_variants.vcf.gz" -O "${output_prefix}_variant_metrics" --DBSNP /db/dbsnp_138.hg38.vcf.gz
-    
-   
-}
+gatk HaplotypeCaller -R /ref/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fasta -I NA12878_bqsr.bam -O NA12878_variants.vcf.gz
 
-#  wyjscie baserecaliblator -  NA12878_bqsr.bam
-variant_discovery "NA12878_bqsr.bam" "NA12878"
+echo "filtrowanie i adnotacja"
+echo "-----------------"
+
+
+gatk CNNScoreVariants -V NA12878_variants.vcf.gz -R /ref/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fasta -O NA12878.CNN1D.vcf
+
+gatk CNNScoreVariants -V NA12878_variants.vcf -R /ref/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fasta -O NA12878.CNN2D.vcf -I NA12878_bqsr.bam -tensor-type read_tensor
+ 
+gatk FilterVariantTranches --output NA12878.CNN1D.filtered.vcf --snp-tranche 99.95 --indel-tranche 99.4 --resource /db/hapmap_3.3.hg38.vcf.gz --resource /db/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz --info-key CNN_1D --variant NA12878.CNN1D.vcf
+ 
+gatk SelectVariants -V NA12878.CNN1D.filtered.vcf -O NA12878.CNN1D.filtered_out.vcf --exclude-filtered true
+gatk SelectVariants -V NA12878.CNN2D.filtered.vcf -O NA12878.CNN2D.filtered_out.vcf --exclude-filtered true
+
+
+
+
+
+
