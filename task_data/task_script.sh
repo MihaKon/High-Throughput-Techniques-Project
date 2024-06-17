@@ -28,7 +28,6 @@ echo "VARIANT DISCOVERY"
 echo "-----------------"
 
 gatk HaplotypeCaller -R /ref/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fasta.fai -I NA12878_br_hcr.rt -O NA12878_br.vcf.gz
-exit 0
 gatk HaplotypeCaller -R /ref/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fasta.fai -I NA12878_bqsr_hcr.bam -O NA12878_bqsr.vcf.gz
 
 echo "CALLSET REFINEMENT"
