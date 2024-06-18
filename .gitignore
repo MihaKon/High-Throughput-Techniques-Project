@@ -4,3 +4,9 @@
 **/*.bam
 **/*.rt
 **/*.bai
+**/*.vcf
+**/*.idx
+**/*.csv
+**/*.R
+**/*.recal
+**/*.tranches
