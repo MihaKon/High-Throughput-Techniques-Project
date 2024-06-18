@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-set -x
-
 if [ ! -f /task_data/NA12878_chr20_1.fastq.gz ]; then
     cp /data/NA12878_chr20_1.fastq.gz /task_data/
 fi
@@ -50,7 +48,8 @@ echo "-----------------"
 function get_analyze_ready() {
     
     local filename=$1
-    local variant_type=$2 
+    local variant_type=$2
+    local truth_sensitivity_level=${3:-"99.5"}    
 
 
     gatk SelectVariants -V "${filename}.vcf" -select-type ${variant_type} -O "${filename}.${variant_type,,}.vcf"
@@ -81,7 +80,7 @@ function get_analyze_ready() {
         -V "${filename}.${variant_type,,}.vcf" \
         --tranches-file "${filename}.${variant_type,,}.tranches" \
         --recal-file "${filename}.${variant_type,,}.recal" \
-        --truth-sensitivity-filter-level 99.5 \
+        --truth-sensitivity-filter-level $truth_sensitivity_level \
         -mode ${variant_type} \
         -O "${filename}.${variant_type,,}.cnnready.vcf"
 }
@@ -90,6 +89,8 @@ function add_score() {
 
     local filename=$1
     local bam_filename=$2
+    local snp_tranche=$3
+    local indel_tranche=$4
 
     gatk MergeVcfs -I "${filename}.snp.cnnready.vcf" -I "${filename}.indel.cnnready.vcf" -O "${filename}.filtered.vcf"
     gatk CNNScoreVariants -V "${filename}.filtered.vcf" \
@@ -101,15 +102,15 @@ function add_score() {
         -I "${bam_filename}.bam" \
         -tensor-type read_tensor
     gatk FilterVariantTranches --output "${filename}.CNN1D.filtered.vcf" \
-        --snp-tranche 99.95 \
-        --indel-tranche 99.4 \
+        --snp-tranche $snp_tranche \
+        --indel-tranche $indel_tranche \
         --resource /db/hapmap_3.3.hg38.vcf.gz \
         --resource /db/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz \
         --info-key CNN_1D \
         --variant "${filename}.CNN1D.vcf"
     gatk FilterVariantTranches --output "${filename}.CNN2D.filtered.vcf" \
-        --snp-tranche 99.95 \
-        --indel-tranche 99.4 \
+        --snp-tranche $snp_tranche \
+        --indel-tranche $indel_tranche \
         --resource /db/hapmap_3.3.hg38.vcf.gz \
         --resource /db/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz \
         --info-key CNN_2D \
@@ -123,25 +124,24 @@ select_variants() {
     gatk SelectVariants -V "${filename}.CNN2D.filtered.vcf" -O "${filename}.CNN2D.filtered_out.vcf" --exclude-filtered true
 }
 
-echo "BQSR ANALYSIS"
-get_analyze_ready "NA12878_bqsr" "SNP"
-get_analyze_ready "NA12878_bqsr" "INDEL"
+if [ ! -f "NA12878_bqsr.CNN2D.filtered_out.vcf" ]; then
+    echo "BQSR ANALYSIS"
+    get_analyze_ready "NA12878_bqsr" "SNP"
+    get_analyze_ready "NA12878_bqsr" "INDEL"
 
-echo "BQSR SCORE"
-add_score "NA12878_bqsr" "NA12878_bqsr_hcr"
+    echo "BQSR SCORE"
+    add_score "NA12878_bqsr" "NA12878_bqsr_hcr" 99.95 99.5
 
-echo "BQSR SELECT VARIANTS"
-select_variants "NA12878_bqsr"
+    echo "BQSR SELECT VARIANTS"
+    select_variants "NA12878_bqsr"
+fi
 
 echo "BR ANALYSIS"
-get_analyze_ready "NA12878_br" "SNP"
-get_analyze_ready "NA12878_br" "INDEL"
+get_analyze_ready "NA12878_br" "SNP" 0 
+get_analyze_ready "NA12878_br" "INDEL" 0 
 
 echo "BR SCORE"
-add_score "NA12878_br" "NA12878_marked_dupl"
+add_score "NA12878_br" "NA12878_marked_dupl" 98.00 92.0
 
 echo "BR SELECT VARIANTS"
 select_variants "NA12878_br"
-
-istory > history.txt
-set +x
