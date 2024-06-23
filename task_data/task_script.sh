@@ -36,6 +36,7 @@ echo "VARIANT DISCOVERY"
 echo "-----------------"
 
 if [ ! -f "NA12878_br.vcf" ]; then
+    samtools index -@ $ProcCount "NA12878_marked_dupl.bam"
     gatk HaplotypeCaller -R /ref/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fasta -I NA12878_marked_dupl.bam -O NA12878_br.vcf
 fi
 if [ ! -f "NA12878_bqsr.vcf" ]; then
@@ -49,8 +50,6 @@ function get_analyze_ready() {
     
     local filename=$1
     local variant_type=$2
-    local truth_sensitivity_level=${3:-"99.5"}    
-
 
     gatk SelectVariants -V "${filename}.vcf" -select-type ${variant_type} -O "${filename}.${variant_type,,}.vcf"
     if [ "${variant_type,,}" == "indel" ]; then
@@ -80,8 +79,8 @@ function get_analyze_ready() {
         -V "${filename}.${variant_type,,}.vcf" \
         --tranches-file "${filename}.${variant_type,,}.tranches" \
         --recal-file "${filename}.${variant_type,,}.recal" \
-        --truth-sensitivity-filter-level $truth_sensitivity_level \
-        -mode ${variant_type} \
+        --truth-sensitivity-filter-level 99.5 \
+        --mode "${variant_type}" \
         -O "${filename}.${variant_type,,}.cnnready.vcf"
 }
 
@@ -89,39 +88,37 @@ function add_score() {
 
     local filename=$1
     local bam_filename=$2
-    local snp_tranche=$3
-    local indel_tranche=$4
 
     gatk MergeVcfs -I "${filename}.snp.cnnready.vcf" -I "${filename}.indel.cnnready.vcf" -O "${filename}.filtered.vcf"
     gatk CNNScoreVariants -V "${filename}.filtered.vcf" \
         -R /ref/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fasta \
         -O "${filename}.CNN1D.vcf"
-    gatk CNNScoreVariants -V "${filename}.filtered.vcf" \
-        -R /ref/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fasta \
-        -O "${filename}.CNN2D.vcf" \
-        -I "${bam_filename}.bam" \
-        -tensor-type read_tensor
-    gatk FilterVariantTranches --output "${filename}.CNN1D.filtered.vcf" \
-        --snp-tranche $snp_tranche \
-        --indel-tranche $indel_tranche \
-        --resource /db/hapmap_3.3.hg38.vcf.gz \
-        --resource /db/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz \
-        --info-key CNN_1D \
-        --variant "${filename}.CNN1D.vcf"
-    gatk FilterVariantTranches --output "${filename}.CNN2D.filtered.vcf" \
-        --snp-tranche $snp_tranche \
-        --indel-tranche $indel_tranche \
-        --resource /db/hapmap_3.3.hg38.vcf.gz \
-        --resource /db/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz \
-        --info-key CNN_2D \
-        --variant "${filename}.CNN2D.vcf"
+    # gatk CNNScoreVariants -V "${filename}.filtered.vcf" \
+    #     -R /ref/GCA_000001405.15_GRCh38_no_alt_plus_hs38d1_analysis_set.fasta \
+    #     -O "${filename}.CNN2D.vcf" \
+    #     -I "${bam_filename}.bam" \
+    #     -tensor-type read_tensor
+    # gatk FilterVariantTranches --output "${filename}.CNN1D.vcf" \
+    #     --snp-tranche 99.95 \
+    #     --indel-tranche 99.4 \
+    #     --resource /db/hapmap_3.3.hg38.vcf.gz \
+    #     --resource /db/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz \
+    #     --info-key CNN_1D \
+    #     --variant "${filename}.CNN1D.vcf"
+    # gatk FilterVariantTranches --output "${filename}.CNN2D.vcf" \
+    #     --snp-tranche $snp_tranche \
+    #     --indel-tranche $indel_tranche \
+    #     --resource /db/hapmap_3.3.hg38.vcf.gz \
+    #     --resource /db/Mills_and_1000G_gold_standard.indels.hg38.vcf.gz \
+    #     --info-key CNN_2D \
+    #     --variant "${filename}.CNN2D.vcf"
 }
 
 select_variants() {
     local filename=$1
 
-    gatk SelectVariants -V "${filename}.CNN1D.filtered.vcf" -O "${filename}.CNN1D.filtered_out.vcf" --exclude-filtered true
-    gatk SelectVariants -V "${filename}.CNN2D.filtered.vcf" -O "${filename}.CNN2D.filtered_out.vcf" --exclude-filtered true
+    gatk SelectVariants -V "${filename}.CNN1D.vcf" -O "${filename}.CNN1D.filtered_out.vcf" --exclude-filtered true
+    # gatk SelectVariants -V "${filename}.CNN2D.vcf" -O "${filename}.CNN2D.filtered_out.vcf" --exclude-filtered true
 }
 
 if [ ! -f "NA12878_bqsr.CNN2D.filtered_out.vcf" ]; then
@@ -130,18 +127,20 @@ if [ ! -f "NA12878_bqsr.CNN2D.filtered_out.vcf" ]; then
     get_analyze_ready "NA12878_bqsr" "INDEL"
 
     echo "BQSR SCORE"
-    add_score "NA12878_bqsr" "NA12878_bqsr_hcr" 99.95 99.5
+    add_score "NA12878_bqsr" "NA12878_bqsr_hcr"
 
     echo "BQSR SELECT VARIANTS"
     select_variants "NA12878_bqsr"
 fi
 
-echo "BR ANALYSIS"
-get_analyze_ready "NA12878_br" "SNP" 0 
-get_analyze_ready "NA12878_br" "INDEL" 0 
+if [ ! -f "NA12878_br.CNN2D.filtered_out.vcf" ]; then
+    echo "BR ANALYSIS"
+    get_analyze_ready "NA12878_br" "SNP" 
+    get_analyze_ready "NA12878_br" "INDEL" 
 
-echo "BR SCORE"
-add_score "NA12878_br" "NA12878_marked_dupl" 98.00 92.0
+    echo "BR SCORE"
+    add_score "NA12878_br" "NA12878_marked_dupl" 
 
-echo "BR SELECT VARIANTS"
-select_variants "NA12878_br"
+    echo "BR SELECT VARIANTS"
+    select_variants "NA12878_br"
+fi
